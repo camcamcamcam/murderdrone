@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Xml.Serialization;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
-using StardewModdingAPI.Framework.RewriteFacades;
-using StardewModdingAPI.Utilities;
 using StardewValley;
-using StardewValley.BellsAndWhistles;
 using StardewValley.Locations;
 
 namespace MURDERDRONE
@@ -15,11 +12,7 @@ namespace MURDERDRONE
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod, IAssetLoader
     {
-        readonly float r = 80f;
-        float t;
-        readonly float speed = 1f/120f;
-        readonly float offsetY = 20f;
-        readonly float offsetX = 5f;
+        private ModConfig Config;
 
         /*********
         ** Public methods
@@ -28,15 +21,20 @@ namespace MURDERDRONE
         /// <param name="helper">Provides simplified APIs for writing mods.</param>
         public override void Entry(IModHelper helper)
         {
-            helper.Events.GameLoop.DayStarted += TimeEvents_AfterDayStarted;
-            helper.Events.Input.ButtonPressed += Input_ButtonPressed;
+            Config = Helper.ReadConfig<ModConfig>();
+
+            Helper.Events.GameLoop.Saving += GameLoop_SaveCreated;
+            Helper.Events.Input.ButtonPressed += Input_ButtonPressed;
+
+            if (Config.Active)
+                Helper.Events.Player.Warped += PlayerEvents_Warped;
         }
 
         /// <summary>Get whether this instance can load the initial version of the given asset.</summary>
         /// <param name="asset">Basic metadata about the asset being loaded.</param>
         public bool CanLoad<T>(IAssetInfo asset)
         {
-            return asset.AssetNameEquals(@"Critter\Drone");
+            return asset.AssetNameEquals(@"Helper\Drone");
         }
 
         /// <summary>Load a matched asset.</summary>
@@ -49,29 +47,33 @@ namespace MURDERDRONE
         /*********
         ** Private methods
         *********/
-        /// <summary>
-        /// The method called after the player loads their save.
-        /// </summary>
-        /// <param name="sender">The event sender.</param>
-        /// <param name="e">The event arguments.</param>
-        private void TimeEvents_AfterDayStarted(object sender, EventArgs e)
+        private void GameLoop_SaveCreated(object sender, SavingEventArgs e)
         {
-            Helper.Events.Player.Warped += PlayerEvents_Warped;
+            RemoveDrone();
         }
 
         private void Input_ButtonPressed(object sender, ButtonPressedEventArgs e)
         {
-            if (e.Button == SButton.Q)
+            if (!Context.IsPlayerFree || Game1.currentMinigame != null)
+                return;
+            Type type = typeof(StardewModdingAPI.SButton);
+            if (e.Button == (SButton)Enum.Parse(type, Config.KeyboardShortcut, true))
             {
-                foreach (var npc in Game1.currentLocation.getCharacters())
+                if (Config.Active)
                 {
-                    if (npc.IsMonster)
-                    {
-                        Monitor.Log(npc.getName());
-                        Monitor.Log(WithinPlayerThreshold(6, npc).ToString());
-                    }
+                    RemoveDrone();
+                    Helper.Events.Player.Warped -= PlayerEvents_Warped;
+                    Config.Active = false;
                 }
-            }
+                else
+                {
+                    AddDrone();
+                    Helper.Events.Player.Warped += PlayerEvents_Warped;
+                    Config.Active = true;
+                }
+
+                Helper.WriteConfig(Config);
+            }     
         }
 
         /// <summary>
@@ -84,62 +86,28 @@ namespace MURDERDRONE
             if (!e.IsLocalPlayer || Game1.CurrentEvent != null)
                 return;
 
-            if (e.NewLocation is MineShaft == false && e.NewLocation is Farm == false)
-                return;
-
-            if (Game1.getCharacterFromName("Drone") is NPC == false)
-            {
-                e.NewLocation.addCharacter(new NPC(new AnimatedSprite(@"Critter\Drone", 0, 12, 12), new Vector2(Game1.player.Position.X, Game1.player.Position.Y), 1, "Drone"));
-                Game1.getCharacterFromName("Drone").Sprite.loop = false; /// TODO: set to true late please
-                Game1.getCharacterFromName("Drone").Sprite.setCurrentAnimation(new List<FarmerSprite.AnimationFrame>
-                {
-                    new FarmerSprite.AnimationFrame(1, 100),
-                    new FarmerSprite.AnimationFrame(2, 100),
-                    new FarmerSprite.AnimationFrame(3, 100),
-                    new FarmerSprite.AnimationFrame(4, 100),
-                    new FarmerSprite.AnimationFrame(5, 100),
-                    new FarmerSprite.AnimationFrame(6, 100),
-                    new FarmerSprite.AnimationFrame(0, 100)
-                });
-
-                Helper.Events.GameLoop.UpdateTicked += GameLoop_UpdateTicked;
-                Helper.Events.GameLoop.OneSecondUpdateTicked += GameLoop_OneSecondUpdateTicked;
-            }
-            else
-                Game1.warpCharacter(Game1.getCharacterFromName("Drone"), e.NewLocation, new Vector2(Game1.player.Position.X, Game1.player.Position.Y));
+            AddDrone();
         }
 
-        private void GameLoop_UpdateTicked(object sender, UpdateTickedEventArgs e)
+        private void RemoveDrone()
         {
-            if (Game1.getCharacterFromName("Drone") is NPC drone)
+            if (Game1.getCharacterFromName("Drone") is Drone drone)
             {
-                float newX = Game1.player.Position.X + offsetX + r * (float)Math.Cos(t * 2 * Math.PI);
-                float newY = Game1.player.Position.Y - offsetY + r * (float)Math.Sin(t * 2 * Math.PI);
-                drone.Position = new Vector2(newX, newY);
-
-                t = (t + speed) % 1;
+                Game1.removeThisCharacterFromAllLocations(drone);
             }
         }
 
-        private void GameLoop_OneSecondUpdateTicked(object sender, OneSecondUpdateTickedEventArgs e)
+        private bool AddDrone()
         {
-
-        }
-
-        private bool WithinPlayerThreshold(int threshold, NPC npc)
-        {
-            if (npc.currentLocation != null && !npc.currentLocation.Equals((object)Game1.currentLocation))
+            if (Game1.currentLocation is MineShaft == false && Game1.currentLocation is Farm == false)
                 return false;
 
-            Vector2 tileLocation1 = Game1.player.getTileLocation();
-            Vector2 tileLocation2 = npc.getTileLocation();
+            if (Game1.getCharacterFromName("Drone") is NPC == false)
+                Game1.currentLocation.addCharacter(new Drone(Config.RotationSpeed, Config.Damage, (float)Config.ProjectileVelocity));
+            else
+                Game1.warpCharacter(Game1.getCharacterFromName("Drone"), Game1.currentLocation, Game1.player.Position);
 
-            double d = Math.Abs(Math.Sqrt(
-                Math.Pow(Math.Abs(tileLocation2.X - tileLocation1.X), 2) +
-                Math.Pow(Math.Abs(tileLocation2.Y - tileLocation1.Y), 2)
-            ));
-
-            return d <= threshold;
+            return true;
         }
     }
 } 

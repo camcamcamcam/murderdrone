@@ -49,9 +49,8 @@
     <None Include="packages.config" />
     <None Include="manifest.json" />
     <None Include="Assets\drone_sprite.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Assets\drone_sprite2.png">
+    <None Include="Assets\drone_sprite_robot.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

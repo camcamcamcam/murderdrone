@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Runtime.InteropServices;
-using System.Xml.Serialization;
-using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
-using StardewValley.Locations;
 
 namespace MURDERDRONE
 {
@@ -25,23 +21,24 @@ namespace MURDERDRONE
 
             Helper.Events.GameLoop.Saving += GameLoop_SaveCreated;
             Helper.Events.Input.ButtonPressed += Input_ButtonPressed;
-
-            if (Config.Active)
-                Helper.Events.Player.Warped += PlayerEvents_Warped;
+            Helper.Events.Player.Warped += PlayerEvents_Warped;
         }
 
         /// <summary>Get whether this instance can load the initial version of the given asset.</summary>
         /// <param name="asset">Basic metadata about the asset being loaded.</param>
         public bool CanLoad<T>(IAssetInfo asset)
         {
-            return asset.AssetNameEquals(@"Helper\Drone");
+            return asset.AssetNameEquals("Sidekick/Drone");
         }
 
         /// <summary>Load a matched asset.</summary>
         /// <param name="asset">Basic metadata about the asset being loaded.</param>
         public T Load<T>(IAssetInfo asset)
         {
-            return Helper.Content.Load<T>(@"Assets\drone_sprite.png", ContentSource.ModFolder);
+            if (asset.AssetNameEquals("Sidekick/Drone"))
+                return Helper.Content.Load<T>("Assets/drone_sprite_robot.png", ContentSource.ModFolder);
+
+            throw new InvalidOperationException($"Unexpected asset '{asset.AssetName}'.");
         }
 
         /*********
@@ -56,20 +53,20 @@ namespace MURDERDRONE
         {
             if (!Context.IsPlayerFree || Game1.currentMinigame != null)
                 return;
-            Type type = typeof(StardewModdingAPI.SButton);
-            if (e.Button == (SButton)Enum.Parse(type, Config.KeyboardShortcut, true))
+
+            if (e.Button == (SButton)Enum.Parse(typeof(SButton), Config.KeyboardShortcut, true))
             {
                 if (Config.Active)
                 {
                     RemoveDrone();
-                    Helper.Events.Player.Warped -= PlayerEvents_Warped;
                     Config.Active = false;
+                    Game1.showRedMessage("Drone deactivated.");
                 }
                 else
                 {
                     AddDrone();
-                    Helper.Events.Player.Warped += PlayerEvents_Warped;
                     Config.Active = true;
+                    Game1.addHUDMessage(new HUDMessage("Drone activated.", 4));
                 }
 
                 Helper.WriteConfig(Config);
@@ -83,7 +80,7 @@ namespace MURDERDRONE
         /// <param name="e">The event arguments.</param>
         private void PlayerEvents_Warped(object sender, WarpedEventArgs e)
         {
-            if (!e.IsLocalPlayer || Game1.CurrentEvent != null)
+            if (!e.IsLocalPlayer || Game1.CurrentEvent != null || !Config.Active)
                 return;
 
             AddDrone();
@@ -91,23 +88,18 @@ namespace MURDERDRONE
 
         private void RemoveDrone()
         {
-            if (Game1.getCharacterFromName("Drone") is Drone drone)
+            if (Game1.getCharacterFromName("Drone") is NPC drone)
             {
                 Game1.removeThisCharacterFromAllLocations(drone);
             }
         }
 
-        private bool AddDrone()
+        private void AddDrone()
         {
-            if (Game1.currentLocation is MineShaft == false && Game1.currentLocation is Farm == false)
-                return false;
-
             if (Game1.getCharacterFromName("Drone") is NPC == false)
-                Game1.currentLocation.addCharacter(new Drone(Config.RotationSpeed, Config.Damage, (float)Config.ProjectileVelocity));
+                Game1.currentLocation.addCharacter(new Drone(Config.RotationSpeed, Config.Damage, (float)Config.ProjectileVelocity, Helper));
             else
                 Game1.warpCharacter(Game1.getCharacterFromName("Drone"), Game1.currentLocation, Game1.player.Position);
-
-            return true;
         }
     }
 } 

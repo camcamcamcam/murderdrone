@@ -4,7 +4,8 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 using StardewValley.Projectiles;
 using StardewValley.Monsters;
-using System.Xml.Serialization;
+using StardewModdingAPI;
+using Netcode;
 
 namespace MURDERDRONE
 {
@@ -19,19 +20,21 @@ namespace MURDERDRONE
         private Monster target;
         private BasicProjectile basicProjectile;
         private int damage;
-        private float projectileVelocity;
+        private readonly float projectileVelocity;
+        private readonly IModHelper helper;
 
         public Drone()
         {
         }
 
-        public Drone(int speed, int damage, float projectileVelocity)
-        : base(new AnimatedSprite(@"Helper\Drone", 0, 12, 12), Game1.player.Position, 1, "Drone")
+        public Drone(int speed, int damage, float projectileVelocity, IModHelper helper)
+        : base(new AnimatedSprite("Sidekick/Drone", 1, 12, 12), Game1.player.Position, 1, "Drone")
         {
             this.speed = speed;
             this.hideShadow.Value = true;
             this.damage = damage;
             this.projectileVelocity = projectileVelocity;
+            this.helper = helper;
         }
 
         public override bool CanSocialize => false;
@@ -59,9 +62,6 @@ namespace MURDERDRONE
                 {
                     if (npc.IsMonster && npc.withinPlayerThreshold(3))
                     {
-                        if (npc is Bug bug && bug.isArmoredBug)
-                            continue;
-
                         throwing = true;
                         target = (Monster)npc;
                         break;
@@ -84,29 +84,45 @@ namespace MURDERDRONE
             {
                 if (damage == -1)
                 {
-                    damage = monster.maxHealth;
+                    damage = monster.Health;
                 }
 
-                Vector2 velocityTowardMonster = Utility.getVelocityTowardPoint(new Vector2(position.X, position.Y), new Vector2(monster.position.X, monster.position.Y), projectileVelocity);
+                BasicProjectile.onCollisionBehavior collisionBehavior = new BasicProjectile.onCollisionBehavior(
+                    delegate(GameLocation loc, int x, int y, Character who)
+                    {
+                        if (monster is Bug bug && bug.isArmoredBug)
+                            helper.Reflection.GetField<NetBool>(bug, "isArmoredBug").SetValue(new NetBool(false));
+
+                        loc.damageMonster(monster.GetBoundingBox(), damage, damage + 1, true, !(who is Farmer) ? Game1.player : who as Farmer);
+                    }
+                );
+
+                string collisionSound = "hitEnemy";
+
+                Vector2 velocityTowardMonster = Utility.getVelocityTowardPoint(Position, monster.Position, projectileVelocity);
                 basicProjectile = new BasicProjectile(
                     damage,
-                    Projectile.throwingKnife,
+                    Projectile.shadowBall,
                     0,
                     0,
-                    1f,
+                    0,
                     velocityTowardMonster.X,
                     velocityTowardMonster.Y,
                     position,
-                    collisionSound: "hitEnemy",
+                    collisionSound,
                     firingSound: "daggerswipe",
-                    explode: true,
+                    explode: false,
                     damagesMonsters: true,
                     location: location,
-                    firer: this
-                );
+                    firer: this,
+                    false,
+                    collisionBehavior
+                )
+                {
+                    IgnoreLocationCollision = (Game1.currentLocation.currentEvent != null)
+                };
 
-                location.projectiles.Add((Projectile) basicProjectile);
-                Logger.Log((Math.PI / (64.0 + Game1.random.Next(-63, 64))).ToString());
+                location.projectiles.Add(basicProjectile);
                 thrown = true;
             }
 

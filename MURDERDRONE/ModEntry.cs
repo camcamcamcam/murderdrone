@@ -2,6 +2,7 @@
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Locations;
 
 namespace MURDERDRONE
 {
@@ -70,7 +71,7 @@ namespace MURDERDRONE
                 }
 
                 Helper.WriteConfig(Config);
-            }     
+            }
         }
 
         /// <summary>
@@ -96,6 +97,9 @@ namespace MURDERDRONE
 
         private void AddDrone()
         {
+            if (Game1.currentLocation is DecoratableLocation)
+                return;
+
             if (Game1.getCharacterFromName("Drone") is NPC == false)
                 Game1.currentLocation.addCharacter(new Drone(Config.RotationSpeed, Config.Damage, (float)Config.ProjectileVelocity, Helper));
             else

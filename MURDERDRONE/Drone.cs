@@ -91,14 +91,17 @@ namespace MURDERDRONE
                 BasicProjectile.onCollisionBehavior collisionBehavior = new BasicProjectile.onCollisionBehavior(
                     delegate(GameLocation loc, int x, int y, Character who)
                     {
-                        Tool currentTool = Game1.player.CurrentTool;
+                        Tool currentTool = null;
+
+                        if (Game1.player.CurrentTool != null && Game1.player.CurrentTool is Tool)
+                            currentTool = Game1.player.CurrentTool;
 
                         if (monster is Bug bug && bug.isArmoredBug)
                             helper.Reflection.GetField<NetBool>(bug, "isArmoredBug").SetValue(new NetBool(false));
 
                         if (monster is RockCrab rockCrab)
                         {
-                            if (Game1.player.CurrentTool is Pickaxe)
+                            if (Game1.player.CurrentTool != null && Game1.player.CurrentTool is Tool && currentTool != null && Game1.player.CurrentTool is Pickaxe)
                                 Game1.player.CurrentTool = new MeleeWeapon(4);
 
                             helper.Reflection.GetField<NetBool>(rockCrab, "shellGone").SetValue(new NetBool(true));
@@ -106,7 +109,9 @@ namespace MURDERDRONE
                         }
 
                         loc.damageMonster(monster.GetBoundingBox(), damage, damage + 1, true, !(who is Farmer) ? Game1.player : who as Farmer);
-                        Game1.player.CurrentTool = currentTool;
+
+                        if (Game1.player.CurrentTool != null && Game1.player.CurrentTool is Tool && currentTool != null)
+                            Game1.player.CurrentTool = currentTool;
                     }
                 );
 

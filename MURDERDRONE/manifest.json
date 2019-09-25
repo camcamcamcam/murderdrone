@@ -1,6 +1,6 @@
 ﻿{
   "Name": "MURDER DRONE",
-  "Version": "0.0.5",
+  "Version": "0.0.6",
   "Description": "THIS DRONE WILL MURDER EVERYTHING",
   "UniqueID": "cambam.MURDERDRONE",
   "EntryDll": "MURDERDRONE.dll",
